@@ -53,9 +53,9 @@ jobs:
           --add-exports=java.base/sun.reflect.generics.reflectiveObjects=ALL-UNNAMED
           -Djdk.tls.client.protocols=TLSv1.2' >> $GITHUB_ENV
 
-      - name: Build (compile with JDK 11)
+      - name: Build and install with JDK 11
         run: |
-          ./mvnw test-compile -Pall-java,lgpl -B -V
+          ./mvnw install -DskipTests -Pall-java,lgpl -B -V
 
       - name: Setup JDK 25 (run tests)
         uses: actions/setup-java@v5
