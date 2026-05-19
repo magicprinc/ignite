@@ -65,7 +65,9 @@ jobs:
 
       - name: Set MAVEN_OPTS for JDK 25
         run: |
-          echo MAVEN_OPTS='-showversion
+          cat >> $GITHUB_ENV << 'GITHUB_ENV_EOF'
+          MAVEN_OPTS<<MAVEN_EOF
+          -showversion
           -XX:+UseCompactObjectHeaders
           -Djdk.tracePinnedThreads=full
           -XX:+IgnoreUnrecognizedVMOptions
@@ -114,7 +116,9 @@ jobs:
           --add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
           --add-opens=jdk.internal.jvmstat/sun.jvmstat.monitor=ALL-UNNAMED
           --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED
-          --add-opens=java.logging/java.util.logging=ALL-UNNAMED' >> $GITHUB_ENV
+          --add-opens=java.logging/java.util.logging=ALL-UNNAMED
+          MAVEN_EOF
+          GITHUB_ENV_EOF
 
       - name: Run tests on JDK 25
         run: |
