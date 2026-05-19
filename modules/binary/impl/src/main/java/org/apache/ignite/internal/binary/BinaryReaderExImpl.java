@@ -2519,13 +2519,8 @@ class BinaryReaderExImpl implements BinaryReaderEx {
 
                     Object val = fld.dynamic ? readField(fld.id) : readFixedType(fld);
 
-                    try {
-                        if (val != null || !fld.field.getType().isPrimitive())
-                            fld.field.set(obj, val);
-                    }
-                    catch (IllegalAccessException e) {
-                        throw new BinaryObjectException("Failed to set value for field: " + fld.field, e);
-                    }
+                    if (val != null || !fld.field.getType().isPrimitive())
+                        GridUnsafe.putObjectField(obj, fld.offset, val);
             }
         }
         catch (Exception ex) {

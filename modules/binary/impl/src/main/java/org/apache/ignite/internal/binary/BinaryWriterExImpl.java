@@ -1648,14 +1648,7 @@ class BinaryWriterExImpl implements BinaryWriterEx {
             default:
                 assert obj != null;
 
-                Object val;
-
-                try {
-                    val = fld.field.get(obj);
-                }
-                catch (IllegalAccessException e) {
-                    throw new BinaryObjectException("Failed to get value for field: " + fld.field, e);
-                }
+                Object val = GridUnsafe.getObjectField(obj, fld.offset);
 
                 switch (mode(fld, val)) {
                     case BYTE:
