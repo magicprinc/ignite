@@ -96,6 +96,20 @@ import static org.apache.ignite.internal.binary.GridBinaryMarshaller.UUID_ARR;
  */
 @SuppressWarnings("unchecked")
 class BinaryReaderExImpl implements BinaryReaderEx {
+    /** Default values for primitive types (used for record component unboxing). */
+    private static final java.util.Map<Class<?>, Object> PRIM_DEFAULTS = new java.util.HashMap<>();
+
+    static {
+        PRIM_DEFAULTS.put(boolean.class, false);
+        PRIM_DEFAULTS.put(byte.class, (byte)0);
+        PRIM_DEFAULTS.put(short.class, (short)0);
+        PRIM_DEFAULTS.put(char.class, '\0');
+        PRIM_DEFAULTS.put(int.class, 0);
+        PRIM_DEFAULTS.put(long.class, 0L);
+        PRIM_DEFAULTS.put(float.class, 0.0f);
+        PRIM_DEFAULTS.put(double.class, 0.0d);
+    }
+
     /** Binary context. */
     private final BinaryContext ctx;
 
@@ -2385,12 +2399,32 @@ class BinaryReaderExImpl implements BinaryReaderEx {
                     break;
 
                 case OBJECT:
-                    res = newInstance(desc.ctor(), desc.describedClass());
+                    if (desc.recordCtor != null) {
+                        // For records, read all field values then construct via canonical constructor.
+                        Map<String, Object> fieldVals = new java.util.HashMap<>();
+                        for (BinaryFieldDescriptor info : desc.fields)
+                            fieldVals.put(info.name, readFieldValue(info));
 
-                    setHandle(res);
+                        Class<?>[] paramTypes = desc.recordCtor.getParameterTypes();
+                        Object[] ctorArgs = new Object[desc.recordCompNames.length];
+                        for (int i = 0; i < desc.recordCompNames.length; i++) {
+                            ctorArgs[i] = fieldVals.get(desc.recordCompNames[i]);
+                            if (ctorArgs[i] == null && paramTypes[i].isPrimitive())
+                                ctorArgs[i] = PRIM_DEFAULTS.get(paramTypes[i]);
+                        }
 
-                    for (BinaryFieldDescriptor info : desc.fields)
-                        readField(res, info);
+                        res = desc.recordCtor.newInstance(ctorArgs);
+
+                        setHandle(res);
+                    }
+                    else {
+                        res = newInstance(desc.ctor(), desc.describedClass());
+
+                        setHandle(res);
+
+                        for (BinaryFieldDescriptor info : desc.fields)
+                            readField(res, info);
+                    }
 
                     break;
 
@@ -2528,6 +2562,36 @@ class BinaryReaderExImpl implements BinaryReaderEx {
                 throw new BinaryObjectException("Failed to read field [name=" + fld.name + ']', ex);
             else
                 throw new BinaryObjectException("Failed to read field [id=" + fld.id + ']', ex);
+        }
+    }
+
+    /**
+     * Reads a field value from the stream without writing it to an object.
+     * Used for record deserialization where field values are passed to the canonical constructor.
+     *
+     * @param fld Binary field descriptor.
+     * @return Field value read from the stream.
+     */
+    private Object readFieldValue(BinaryFieldDescriptor fld) {
+        try {
+            switch (fld.mode) {
+                case P_BYTE: return readByte(fld.id);
+                case P_BOOLEAN: return readBoolean(fld.id);
+                case P_SHORT: return readShort(fld.id);
+                case P_CHAR: return readChar(fld.id);
+                case P_INT: return readInt(fld.id);
+                case P_LONG: return readLong(fld.id);
+                case P_FLOAT: return readFloat(fld.id);
+                case P_DOUBLE: return readDouble(fld.id);
+                default:
+                    return fld.dynamic ? readField(fld.id) : readFixedType(fld);
+            }
+        }
+        catch (Exception ex) {
+            if (S.includeSensitive() && !F.isEmpty(fld.name))
+                throw new BinaryObjectException("Failed to read field value [name=" + fld.name + ']', ex);
+            else
+                throw new BinaryObjectException("Failed to read field value [id=" + fld.id + ']', ex);
         }
     }
 

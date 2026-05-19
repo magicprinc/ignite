@@ -20,6 +20,7 @@ package org.apache.ignite.internal.binary;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -90,6 +91,12 @@ class BinaryClassDescriptor {
 
     /** */
     private final Constructor<?> ctor;
+
+    /** Record canonical constructor (non-null only for record types in OBJECT mode). */
+    final Constructor<?> recordCtor;
+
+    /** Record component names in canonical order (non-null only for record types). */
+    final String[] recordCompNames;
 
     /** */
     final BinaryFieldDescriptor[] fields;
@@ -313,7 +320,35 @@ class BinaryClassDescriptor {
                 break;
 
             case OBJECT:
-                // Must not use constructor to honor transient fields semantics.
+                // Must not use constructor to honor transient fields semantics for regular classes.
+                // For records, cache the canonical constructor for proper deserialization.
+                recordCtor = null;
+                recordCompNames = null;
+                try {
+                    Method isRecordMtd = Class.class.getMethod("isRecord");
+                    if ((boolean)isRecordMtd.invoke(cls)) {
+                        Method getRecCompsMtd = Class.class.getMethod("getRecordComponents");
+                        Object[] recComps = (Object[])getRecCompsMtd.invoke(cls);
+                        recordCompNames = new String[recComps.length];
+                        Class<?>[] paramTypes = new Class<?>[recComps.length];
+                        Method getNameMtd = recComps[0].getClass().getMethod("getName");
+                        Method getTypeMtd = recComps[0].getClass().getMethod("getType");
+                        for (int i = 0; i < recComps.length; i++) {
+                            recordCompNames[i] = (String)getNameMtd.invoke(recComps[i]);
+                            paramTypes[i] = (Class<?>)getTypeMtd.invoke(recComps[i]);
+                        }
+                        try {
+                            recordCtor = cls.getDeclaredConstructor(paramTypes);
+                            recordCtor.setAccessible(true);
+                        } catch (NoSuchMethodException e) {
+                            throw new BinaryObjectException(
+                                "Cannot find canonical constructor for record: " + cls.getName(), e);
+                        }
+                    }
+                } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {
+                    // JDK < 16, records not supported
+                }
+
                 ctor = null;
 
                 if (isLambda(cls)) {
