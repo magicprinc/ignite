@@ -93,10 +93,10 @@ class BinaryClassDescriptor {
     private final Constructor<?> ctor;
 
     /** Record canonical constructor (non-null only for record types in OBJECT mode). */
-    final Constructor<?> recordCtor;
+    Constructor<?> recordCtor;
 
     /** Record component names in canonical order (non-null only for record types). */
-    final String[] recordCompNames;
+    String[] recordCompNames;
 
     /** */
     final BinaryFieldDescriptor[] fields;
